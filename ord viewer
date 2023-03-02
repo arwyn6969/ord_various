@@ -1,0 +1,74 @@
+import requests
+
+def print_matching_broadcast(matching_broadcast):
+    if matching_broadcast:
+        print('Matching broadcast found:')
+        print(f'TX Hash: {matching_broadcast["tx_hash"]}')
+        print(f'BASE64: {matching_broadcast["text"]}')
+    else:
+        print('No matching broadcasts found')
+
+# Prompt the user to enter the search term
+search_term = input('Enter the search term: ')
+
+# Make a GET request to the xChain.io API to retrieve all assets
+url = 'https://xchain.io/api/assets'
+response = requests.get(url)
+
+# Check that the request was successful
+if response.status_code == 200:
+    # Get the assets as a list of dictionaries
+    assets = response.json()['data']
+
+    matching_assets = []
+    for asset in assets:
+        # Check if the search term is in the asset description
+        if search_term in asset['description']:
+            # Extract the tele message tx hash from the description field
+            description = asset['description']
+            tele_message_tx_hash = description.split(';')[1].strip()
+
+            # Check if the tele message tx hash is valid
+            if len(tele_message_tx_hash) == 64:
+                # Add the asset to the list of matching assets
+                matching_assets.append(asset)
+
+    if matching_assets:
+        for asset in matching_assets:
+            # Extract the tele message tx hash from the description field
+            description = asset['description']
+            tele_message_tx_hash = description.split(';')[1].strip()
+
+            # Print the asset information in a user-friendly format
+            print(f'Asset Name: {asset["asset"]}')
+            print(f'Asset ID: {asset["asset_id"]}')
+            print(f'Tele Message TX Hash: {tele_message_tx_hash}')
+
+            # Get broadcasts by the issuer's address
+            issuer_address = asset['issuer']
+            broadcast_url = f'https://xchain.io/api/broadcasts/{issuer_address}'
+            broadcast_response = requests.get(broadcast_url)
+
+            if broadcast_response.status_code == 200:
+                broadcasts = broadcast_response.json()['data']
+                matching_broadcast = None
+                for broadcast in broadcasts:
+                    if broadcast['tx_hash'] == tele_message_tx_hash:
+                        matching_broadcast = broadcast
+                        break
+
+                print_matching_broadcast(matching_broadcast)
+
+                print(f'Total Broadcasts by Issuer ({issuer_address}): {len(broadcasts)}')
+            else:
+                print(f'Error getting broadcasts: {broadcast_response.status_code} - {broadcast_response.reason}')
+
+            print(f'Supply: {asset["supply"]}')
+
+    else:
+        print('No matching assets found')
+
+else:
+    # Print an error message
+    print(f'Error: {response.status_code} - {response.reason}')
+
