@@ -1,0 +1,79 @@
+import json
+import requests
+import re
+
+# Configure the Bitcoin Core RPC connection
+rpc_user = 'your_rpc_user'
+rpc_password = 'your_rpc_password'
+rpc_port = 8332
+rpc_url = f'http://{rpc_user}:{rpc_password}@localhost:{rpc_port}'
+
+# Specify the block height to start scanning from
+start_height = 770000
+
+# Call the "getblockcount" RPC method to get the current block height
+response = requests.post(rpc_url, json={
+    'jsonrpc': '2.0',
+    'id': '1',
+    'method': 'getblockcount',
+    'params': []
+})
+response.raise_for_status()
+current_height = response.json()['result']
+
+# Loop through each block from the start height to the current height
+for height in range(start_height, current_height + 1):
+    # Call the "getblockhash" RPC method to get the hash of the block at the current height
+    response = requests.post(rpc_url, json={
+        'jsonrpc': '2.0',
+        'id': '1',
+        'method': 'getblockhash',
+        'params': [height]
+    })
+    response.raise_for_status()
+    block_hash = response.json()['result']
+
+    # Call the "getblock" RPC method to get the block details
+    response = requests.post(rpc_url, json={
+        'jsonrpc': '2.0',
+        'id': '1',
+        'method': 'getblock',
+        'params': [block_hash]
+    })
+    response.raise_for_status()
+    block = response.json()['result']
+
+    # Loop through each transaction in the block
+    for txid in block['tx']:
+        # Call the "getrawtransaction" RPC method to get the raw transaction details
+        response = requests.post(rpc_url, json={
+            'jsonrpc': '2.0',
+            'id': '1',
+            'method': 'getrawtransaction',
+            'params': [txid, True]
+        })
+        response.raise_for_status()
+        raw_transaction = response.json()['result']
+
+        # Extract the transaction messages from the raw transaction details
+        messages = [vout['scriptPubKey']['asm'] for vin in raw_transaction['vin'] for vout in vin['txid']['vout'] if 'scriptPubKey' in vout]
+
+        # Loop through each message and check for the "stamp:" keyword
+        for msg in messages:
+            if 'stamp:' in msg:
+                # Extract the base64 code from the message using a regular expression pattern
+                pattern = r'stamp:data:image/[^"]+"([^"]+)"'
+                base64_code = re.search(pattern, msg)
+                if base64_code:
+                    base64_code = base64_code.group(1)
+                else:
+                    base64_code = ''
+
+                # Create a new output dictionary with the transaction ID and the extracted base64 code
+                output = {
+                    'TXID': txid,
+                    'BASE64': base64_code
+                }
+
+                # Print the output dictionary as a JSON object
+                print(json.dumps(output))
